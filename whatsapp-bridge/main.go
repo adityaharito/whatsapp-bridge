@@ -1018,7 +1018,7 @@ func connectWhatsAppClient(client *whatsmeow.Client, logger waLog.Logger) error 
 // getRESTPort determines which port the REST server should listen on.
 // It checks REST_PORT, then PORT environment variables, falling back to 8080.
 func getRESTPort() int {
-	defaultPort := 8080
+	defaultPort := 8082
 
 	readPortEnv := func(key string) (int, bool) {
 		val := strings.TrimSpace(os.Getenv(key))
