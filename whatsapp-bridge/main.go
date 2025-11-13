@@ -49,6 +49,37 @@ type MessageStore struct {
 	db *sql.DB
 }
 
+// Add this function
+func getAPIKey() string {
+	if key := os.Getenv("WHATSAPP_API_KEY"); key != "" {
+		return key
+	}
+	// Fallback for development
+	return "dev-key-change-in-production"
+}
+
+// API Key Middleware
+func apiKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		apiKey := r.Header.Get("X-API-Key")
+		if apiKey == "" {
+			apiKey = r.URL.Query().Get("api_key")
+		}
+
+		if apiKey != getAPIKey() {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusUnauthorized)
+			json.NewEncoder(w).Encode(SendMessageResponse{
+				Success: false,
+				Message: "Invalid API key",
+			})
+			return
+		}
+
+		next(w, r)
+	}
+}
+
 // Initialize message store
 func NewMessageStore() (*MessageStore, error) {
 	// Create directory for database if it doesn't exist
@@ -777,7 +808,7 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 	mux := http.NewServeMux()
 
 	// Handler for sending messages
-	mux.HandleFunc("/api/send", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/send", apiKeyMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -849,10 +880,10 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			Success: success,
 			Message: message,
 		})
-	})
+	}))
 
 	// Handler for downloading media
-	mux.HandleFunc("/api/download", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/download", apiKeyMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		// Only allow POST requests
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -900,7 +931,7 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			Filename: filename,
 			Path:     path,
 		})
-	})
+	}))
 
 	address := fmt.Sprintf(":%d", port)
 	listener, err := net.Listen("tcp", address)
